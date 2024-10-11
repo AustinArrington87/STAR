@@ -1,4 +1,5 @@
 import pandas as pd
+from scipy.stats import pearsonr
 
 # Developed by Austin Arrington, PLANT Group LLC
 
@@ -20,26 +21,44 @@ data_filtered = data[columns_of_interest]
 # Function to calculate summary statistics for each star score within the dataset
 def calculate_summary_stats(data, group_by_column):
     summary_stats = data.groupby(group_by_column).agg(['mean', 'min', 'max', 'std']).reset_index()
-    # Flatten column headers for Excel compatibility
     summary_stats.columns = ['_'.join(col).strip() for col in summary_stats.columns.values]
     return summary_stats
 
-# Calculate statistics for all fields
+# Calculate statistics for all fields, corn fields, and soybean fields
 all_fields_stats = calculate_summary_stats(data_filtered, 'star_score')
-
-# Filter data for corn fields and calculate statistics
 corn_fields = data_filtered[data_filtered['crop_type'] == 'C']
 corn_fields_stats = calculate_summary_stats(corn_fields, 'star_score')
-
-# Filter data for soybean fields and calculate statistics
 soybean_fields = data_filtered[data_filtered['crop_type'] == 'SB']
 soybean_fields_stats = calculate_summary_stats(soybean_fields, 'star_score')
 
-# Save the results to an Excel file with each table in a separate sheet
-output_path = 'star_summary_statistics_AA.xlsx'
+# Calculate correlation, R^2, and p-values for each parameter against 'star_score'
+means_by_star_score = data_filtered.groupby('star_score').mean().reset_index()
+star_scores = means_by_star_score['star_score']
+
+correlation_results = {
+    'Parameter': [],
+    'Correlation (r)': [],
+    'R^2': [],
+    'p-value': []
+}
+
+for column in columns_of_interest[2:]:  # Skip 'star_score' and 'crop_type'
+    param_values = means_by_star_score[column]
+    r, p_value = pearsonr(star_scores, param_values)
+    correlation_results['Parameter'].append(column)
+    correlation_results['Correlation (r)'].append(r)
+    correlation_results['R^2'].append(r**2)
+    correlation_results['p-value'].append(p_value)
+
+# Convert correlation results to a DataFrame
+correlation_df = pd.DataFrame(correlation_results)
+
+# Save all results to an Excel file
+output_path = 'star_summary_statistics_with_correlations.xlsx'
 with pd.ExcelWriter(output_path) as writer:
     all_fields_stats.to_excel(writer, sheet_name='all_fields', index=False)
     corn_fields_stats.to_excel(writer, sheet_name='corn_fields', index=False)
     soybean_fields_stats.to_excel(writer, sheet_name='soybean_fields', index=False)
+    correlation_df.to_excel(writer, sheet_name='correlations', index=False)
 
-print(f"Summary statistics saved to {output_path}")
+print(f"Summary statistics and correlations saved to {output_path}")
