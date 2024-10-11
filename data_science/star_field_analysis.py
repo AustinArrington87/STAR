@@ -1,7 +1,9 @@
 import pandas as pd
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, linregress
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Developed by Austin Arrington, PLANT Group LLC
+# Developed by Austin Arrington, PLANT Group LLC | 2024
 
 # Load the dataset
 file_path = 'star_field_outcomes_flat.csv'
@@ -42,6 +44,10 @@ correlation_results = {
     'p-value': []
 }
 
+# Directory to save the plots
+output_plots_dir = 'star_plots/'
+
+# Loop through parameters, calculate correlation and generate scatter plots with regression line
 for column in columns_of_interest[2:]:  # Skip 'star_score' and 'crop_type'
     param_values = means_by_star_score[column]
     r, p_value = pearsonr(star_scores, param_values)
@@ -49,16 +55,35 @@ for column in columns_of_interest[2:]:  # Skip 'star_score' and 'crop_type'
     correlation_results['Correlation (r)'].append(r)
     correlation_results['R^2'].append(r**2)
     correlation_results['p-value'].append(p_value)
+    
+    # Generate scatter plot with regression line
+    plt.figure(figsize=(8, 6))
+    sns.regplot(x=star_scores, y=param_values, line_kws={"color": "red"})
+    plt.title(f'{column} vs STAR Score')
+    plt.xlabel('STAR Score')
+    plt.ylabel(column)
+    
+    # Save the plot
+    plot_filename = f'{output_plots_dir}{column}_vs_star_score.png'
+    plt.savefig(plot_filename)
+    plt.close()
 
 # Convert correlation results to a DataFrame
 correlation_df = pd.DataFrame(correlation_results)
 
-# Save all results to an Excel file
-output_path = 'star_summary_statistics_with_correlations.xlsx'
-with pd.ExcelWriter(output_path) as writer:
+# Save all results to an Excel file with scatter plots
+output_path = 'star_summary_statistics_with_correlations_and_plots.xlsx'
+with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
     all_fields_stats.to_excel(writer, sheet_name='all_fields', index=False)
     corn_fields_stats.to_excel(writer, sheet_name='corn_fields', index=False)
     soybean_fields_stats.to_excel(writer, sheet_name='soybean_fields', index=False)
     correlation_df.to_excel(writer, sheet_name='correlations', index=False)
+    
+    # Add scatter plots to the Excel file
+    workbook = writer.book
+    for column in columns_of_interest[2:]:
+        plot_filename = f'{output_plots_dir}{column}_vs_star_score.png'
+        worksheet = workbook.add_worksheet(column[:31])  # Excel sheet name limit is 31 chars
+        worksheet.insert_image('A1', plot_filename)
 
-print(f"Summary statistics and correlations saved to {output_path}")
+print(f"Summary statistics, correlations, and scatter plots saved to {output_path}")
