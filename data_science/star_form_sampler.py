@@ -1,18 +1,14 @@
 import pandas as pd
 import numpy as np
+import os
 
 # Load the Excel file
-file_path = "Producer Field Export.xlsx"  
-try:
-    xls = pd.ExcelFile(file_path)
-    print("Excel file loaded successfully.")
-except FileNotFoundError:
-    print(f"Error: File '{file_path}' not found.")
-    exit()
+file_path = "Producer Field Export.xlsx" 
+xls = pd.ExcelFile(file_path)
 
-# Load the "Field Forms" sheet
+# Load required sheets
 df_field_forms = pd.read_excel(xls, sheet_name="Field Forms")
-print(f"Loaded 'Field Forms' sheet with {len(df_field_forms)} rows.")
+df_producers = pd.read_excel(xls, sheet_name="Producers")
 
 # Function to determine the sample size
 def calculate_sample_size(n):
@@ -20,15 +16,18 @@ def calculate_sample_size(n):
 
 # Filter only submitted forms (excluding in-progress)
 df_submitted = df_field_forms.dropna(subset=["Submitted At"])
-print(f"Filtered submitted forms: {len(df_submitted)} rows.")
 
 if df_submitted.empty:
-    print("No submitted forms found. Exiting.")
+    print("No submitted field forms found. Exiting.")
     exit()
+
+# Select relevant columns from Producers sheet
+producer_cols = ["User ID", "First Name", "Last Name", "Address", "City", "State", "Zip", "County", "Phone"]
+df_producers_selected = df_producers[producer_cols]
 
 # Group by crop year to determine sample size per year
 sampled_dfs = []
-extra_samples = 10  # Extra fields in case of refusals/unreachable producers
+extra_samples = 10  # Extra fields for refusals/unreachable producers
 
 for year, group in df_submitted.groupby("Year"):
     total_submissions = len(group)
@@ -57,8 +56,19 @@ for year, group in df_submitted.groupby("Year"):
 # Concatenating all sampled data
 if sampled_dfs:
     df_sampled = pd.concat(sampled_dfs)
-    output_path = "Sampled_Field_Forms.xlsx"
-    df_sampled.to_excel(output_path, index=False)
-    print(f"Sampled field forms saved to: {output_path}")
+    print(f"Total sampled records: {len(df_sampled)}")
+
+    # Merge with producer details
+    df_sampled_with_producers = df_sampled.merge(df_producers_selected, on="User ID", how="left")
+    print(f"Merged with producer details: {len(df_sampled_with_producers)} records")
+
+    # Set output file path
+    output_path = os.path.expanduser("Sampled_Field_Forms.xlsx")
+
+    try:
+        df_sampled_with_producers.to_excel(output_path, index=False)
+        print(f"✅ Sampled field forms saved successfully to: {output_path}")
+    except Exception as e:
+        print(f"❌ Error saving file: {e}")
 else:
     print("No sampled data was generated.")
